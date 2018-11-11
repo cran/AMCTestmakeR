@@ -1,8 +1,8 @@
 #' Generate AMC LaTeX question codes in the console, in a LaTeX file, or as a vector.
 #'
 #' @param question A character value or vector containing the questions.
-#' @param correctanswers A character (value, vector) containing the correct answers. A vector (or list) of character vectors can also be passed, in the case of multiple correct answers.
-#' @param incorrectanswers A character (value, vector) containing the wrong answers. A vector (or list) of character vectors can also be passed, in the case of multiple wrong answers.
+#' @param correctanswers A character (value, vector) containing the correct answer. A vector (or list) of character vectors can be passed, in the case of multiple correct answers.
+#' @param incorrectanswers A character (value, vector) containing the wrong answer. A vector (or list) of character vectors can be passed, in the case of multiple wrong answers.
 #' @param element A character value or vector to define the category of the entire set of questions (character value) or of each question (character vector). Defaults to "general.
 #' @param code A character value or vector to identify each question (note that AMC requires each code to be unique in a questionnaire). Defaults to "Q1", "Q2", "Q3", etc. (the prefix "Q" can be changed with the "codeprefix" argument).
 #' @param codeprefix A character value to be used to generate automatically question codes, when not provided with the "code" argument.
@@ -18,6 +18,7 @@
 #' @param scoringnoresponse A numeric value or vector to indicate the scoring for non-responding. Defaults to 0.
 #' @param scoringincoherent A numeric value or vector to indicate the scoring for incoherent answer(s) (e.g. two boxes checked for a single-answer questionnaire). Defaults to 0.
 #' @param scoringbottom A numeric value or vector to indicate the minimum score for the question(s). Especially useful when attributing negative points to incorrect answers in a multiple-answer questionnaire, to ensure students do not lose too many points on one question. Defaults to 0.
+#' @param shuffleanswersonce A logical value to indicate whether to shuffle answers for each question directly in the LaTeX code (useful if the answers are not randomized by examinee by AMC). Defaults to TRUE.
 #'
 #' @return A character value or vector (output = "list" or "vector"), a copy-and-pastable message (output = "message") or a LaTeX .tex file (output = "file") containing AMC LaTeX code for questions and answers.
 #' @export
@@ -54,7 +55,26 @@
 #'   incorrectanswers = list(incorrect1,incorrect2,incorrect3),
 #'   codeprefix = "MATH")
 #'
-AMCcreatequestions <- function(question, correctanswers, incorrectanswers, element = "general", code = paste(codeprefix,c(1:length(question)), sep=""), codeprefix = "Q", output = "message", filepath = "questions.tex", questiontype = "single", append = F, multicols=2, messages = T, listelements = T, scoringcorrect = 1, scoringincorrect = 0, scoringnoresponse = 0, scoringincoherent = scoringincorrect, scoringbottom = scoringincorrect) {
+AMCcreatequestions <- function(question,
+                               correctanswers,
+                               incorrectanswers,
+                               element = "general",
+                               code = paste(codeprefix,c(1:length(question)), sep=""),
+                               codeprefix = "Q",
+                               output = "message",
+                               filepath = "questions.tex",
+                               questiontype = "single",
+                               append = F,
+                               multicols=2,
+                               messages = T,
+                               listelements = T,
+                               scoringcorrect = 1,
+                               scoringincorrect = 0,
+                               scoringnoresponse = 0,
+                               scoringincoherent = scoringincorrect,
+                               scoringbottom = scoringincorrect,
+                               shuffleanswersonce = T
+                               ) {
 
 
 
@@ -155,7 +175,7 @@ AMCcreatequestions <- function(question, correctanswers, incorrectanswers, eleme
     if (questiontype == "multiple") {
       questiontypetext <- "questionmult"
     }
-    if(x < 2){
+    if (x < 2) {
       paste("\\end{choices}\\end{",questiontypetext,"}\n}\n \n", sep="")
       } else{
       paste("\\end{choices}\\end{multicols}\\end{",questiontypetext,"}\n}\n \n", sep="")}
@@ -172,11 +192,40 @@ AMCcreatequestions <- function(question, correctanswers, incorrectanswers, eleme
 
 
 
+
+
+
+
+
+
+
+
   # Bind the code into a dataset
   if(length(question)==1){
-  bindedcode <- cbind(vectorofelement, vectorofcode, vectorofquestion,paste(arrayofcodedcorrectanswers, collapse = " "),paste(arrayofcodedincorrectanswers, collapse = " "), vectorofclosingcode)
+    # For one question, create vector of all answers
+    vectorofallanswersforonequestion <- c(arrayofcodedcorrectanswers, arrayofcodedincorrectanswers)
+
+    # Shuffle them if shuffleanswersonce = TRUE
+    if (shuffleanswersonce == T) {
+      vectorofallanswersforonequestion <- sample(x = vectorofallanswersforonequestion,
+                                                 size = length(vectorofallanswersforonequestion),
+                                                 replace = F)
+    }
+
+    #Bind code
+  bindedcode <- cbind(vectorofelement, vectorofcode, vectorofquestion,paste(vectorofallanswersforonequestion, collapse = " "), vectorofclosingcode)
   } else {
-  bindedcode <- cbind(vectorofelement, vectorofcode, vectorofquestion,arrayofcodedcorrectanswers,arrayofcodedincorrectanswers, vectorofclosingcode) }
+    # Bind together answers in array to randomize them in R
+    arrayofallanswersformultiplequestions <- cbind(arrayofcodedcorrectanswers,arrayofcodedincorrectanswers)
+
+    # Shuffle them if shuffleanswersonce = TRUE
+    if (shuffleanswersonce == T) {
+      shuffled <- datamatrix <- arrayofallanswersformultiplequestions
+      for (i in 1:nrow(datamatrix)) { shuffled[i, ] <- sample(datamatrix[i, ]) }
+      arrayofallanswersformultiplequestions <- shuffled
+    }
+
+  bindedcode <- cbind(vectorofelement, vectorofcode, vectorofquestion,arrayofallanswersformultiplequestions, vectorofclosingcode) }
 
   # Create list of questions
   texfile <- apply(bindedcode, 1, paste, collapse=" ")
@@ -199,7 +248,7 @@ AMCcreatequestions <- function(question, correctanswers, incorrectanswers, eleme
               "%%%%%%%%%%%%%%%%%%%%%%\n",
               "%%%| Instructions |%%%\n",
               "%%%%%%%%%%%%%%%%%%%%%%\n",
-              "%-Place the created .tex file in the AMC project folder. \n-In the main .tex file (usually, \"groups.tex\") point to the created file using \"\\input{", paste(basename(filepath)), "}\".")
+              "%-Place the created .tex file in the AMC project folder. \n-In the main .tex file (usually, \"source.tex\") point to the created file using \"\\input{", paste(basename(filepath)), "}\".")
     }
   }
         #Append list of elements to questions file
@@ -232,6 +281,14 @@ AMCcreatequestions <- function(question, correctanswers, incorrectanswers, eleme
     #return(unname(texfile))
     return(vectorofquestion)
   }
+
+
+  #FOR TESTS
+  if (output == "test") {
+    #return(unname(texfile))
+    return(arrayofallanswersformultiplequestions)
+  }
+
 
   }
 
